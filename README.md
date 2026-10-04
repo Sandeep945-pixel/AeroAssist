@@ -1,86 +1,85 @@
-# ✈️ AeroAssist: Multimodal AI for Aircraft Maintenance
+# AeroAssist
 
-> **Published at:** IEEE Aerospace Conference 2026
-> **Best Paper Award:** IEEE/AIAA DASC 2025
+**Structured prompting for multimodal aircraft-maintenance analysis.**
 
-## 💡 The Problem
+AeroAssist investigates how a pretrained multimodal model can combine inspection video, engine audio, and time-series sensor logs into a structured diagnostic report. Its central method is **Guided Reflective Diagnostic Reasoning (RDR)**: a four-stage prompt that asks the model to examine each input, compare the evidence, identify uncertainty, and report its findings.
 
-A slight visual crack on a turbine blade might mean nothing on its own. But combine it with an unusual vibration pattern in the audio AND a slow pressure drift in the sensor data — now you have a strong signal for metal fatigue. Traditional systems analyze each data type in isolation and miss these correlations. By the time the problem is caught, it's an unscheduled shutdown costing millions.
+**IEEE Aerospace Conference 2026**  
+Sandeep Kalari, Abhinav Panchumarthi, Vikas Ashok, and Ravi Mukkamala
 
-## 🚀 The Solution
+[Conference program](https://www.aeroconf.org/cms/content_attachments/75/download) · [Method and prompting](docs/METHOD.md) · [Repository and setup notes](docs/RELEASE.md) · [Citation](CITATION.bib)
 
-AeroAssist is a **prompt-driven multimodal diagnostic framework** built on **Google Gemini 2.5 Pro** — no fine-tuning, no retraining, no expensive labeled datasets. It processes video, audio, and sensor data in a **single inference call** and reasons across all three modalities like a human expert would.
+## The research question
 
-The secret sauce is **Guided Reflective Diagnostic Reasoning (RDR)** — a 4-phase structured prompting strategy we designed:
+An inspection video may show a surface defect while the sensor log appears normal. An unusual sound may suggest a problem that is difficult to see. A useful report needs to consider agreement, disagreement, and timing across these inputs.
 
-### Phase 1: Independent Analysis
-> "Looking at ONLY the video, what do you observe?"
-> "ONLY the audio — anything unusual?"
-> "ONLY the sensor data — any anomalies?"
+AeroAssist studies how an explicit analysis workflow and in-context examples can guide that comparison. The experiments use Gemini 2.5 Pro and Flash at inference time, without task-specific fine-tuning.
 
-Each modality analyzed in isolation. No bias from one channel contaminating another.
+## Architecture
 
-### Phase 2: Cross-Modal Synthesis & Self-Critique
-> "Now consider all three together. Do the anomalies correlate? Does the crack location match where the vibration spike occurs?"
+![AeroAssist architecture: video with audio, sensor logs, and a user query enter an RDR prompt with optional examples and produce a structured model response](assets/figures/aeroassist-architecture.png)
 
-This is where multimodal power shows up — correlations invisible in any single stream become obvious.
+*Original architecture figure from the paper. “AeroQwen” is a historical prompt-persona label retained in the figure and source; the implementation calls Gemini.*
 
-### Phase 3: Formalized Diagnostic Report
-Structured JSON output with classification (Good / Not Bad / Bad), severity assessment, and recommended action.
+## Guided Reflective Diagnostic Reasoning
 
-### Phase 4: Executive Summary
-Human-readable summary with the final diagnosis, main finding, and primary recommendation.
+| Phase | Prompted task | Purpose |
+| --- | --- | --- |
+| Independent analysis | Describe visual, audio, and sensor observations separately | Establish what each input supports before combining evidence |
+| Cross-modal synthesis and self-critique | Compare observations, examine timing, and state uncertainty | Identify supporting or conflicting evidence |
+| Structured reporting | Produce a report with evidence, severity, and a research triage label | Make the response easier to inspect and process |
+| Executive summary | Summarize the classification, findings, and suggested next steps | Provide a concise account for human review |
 
----
+The method structures a model's generated analysis; it does not guarantee correct perception or diagnosis. Zero-shot prompts supply the instructions directly. Few-shot prompts add examples of the expected analysis and report format.
 
-## 📊 Key Results
+The repository's few-shot function places example sensor logs and reports in the prompt and attaches the **test video** to the request. It does not upload every demonstration video. [Prompt composition and implementation details](docs/METHOD.md).
 
-| Setting | Accuracy |
-|---------|----------|
-| Zero-shot (no examples) | Strong baseline performance |
-| Few-shot (with examples) | **90% classification accuracy** |
+## Multimodal inputs
 
-The few-shot approach uses ~80,000 tokens of context with complete example reasoning chains — teaching the model not just the output format but the depth and style of expert-level diagnostic thinking.
+![Illustrative AeroAssist input: engine video frames with audio alongside a timestamped sensor-data excerpt](assets/figures/aeroassist-input-example.png)
 
----
+*Original input illustration from the paper. The research dataset is semi-synthetic; its sensor traces should not be described as independently collected aircraft telemetry.*
 
-## 🧠 Why No Fine-Tuning?
+Video provides frames and an embedded audio track. Sensor readings are supplied as CSV text. The prompt asks the model to compare their timing rather than assume that the streams describe the same event.
 
-Aerospace fault data is extremely scarce. A specific turbine fault might have 5-10 documented cases worldwide. Fine-tuning on 5 examples = instant overfitting. Gemini 2.5 Pro already understands what cracks look like, what mechanical sounds mean, and what sensor anomalies indicate from pre-training. RDR structures HOW it applies that knowledge.
+## Output and evaluation
 
----
+The few-shot prompt requests a JSON object with four top-level fields:
 
-## 🔍 Interesting Failure Modes
+- `phase1_analysis`
+- `phase2_synthesis`
+- `phase3_formal_report`
+- `phase4_executive_summary`
 
-The framework isn't perfect — and we documented that honestly:
-- **Attentional blindness** — the model occasionally overlooks obvious visual defects when sensor data looks normal, showing over-reliance on one modality
-- **Contradictory evidence** — when modalities disagree, the model can resolve conflicts but sometimes defaults to the "safer" diagnosis
+The formal report includes a `triage_classification` using the research labels `Good`, `Bad`, or `Not Bad`. These labels are experimental outputs, not airworthiness decisions.
 
-These findings position AeroAssist as a diagnostic **co-pilot**, not an autonomous agent. Human oversight remains essential.
+The paper evaluates zero-shot and few-shot conditions using classification, anomaly recall, recommendation actionability, evidence grounding, and report fidelity. It also examines failures such as missed visual defects, incorrect interpretations of motion, and missed audio. These failures matter alongside aggregate performance.
 
----
+## Explore the repository
 
-## 🛠️ Tech Stack
+```bash
+git clone https://github.com/Sandeep945-pixel/AeroAssist.git
+cd AeroAssist
+```
 
-| Component | Technology |
-|-----------|-----------|
-| Foundation Model | Google Gemini 2.5 Pro / Flash |
-| Input Modalities | Video + Audio + Sensor Data |
-| Prompting Strategy | Guided Reflective Diagnostic Reasoning (RDR) |
-| Evaluation | Semi-synthetic aerospace dataset, 30 test cases |
-| Output | Structured JSON diagnostic reports |
+| Path | Contents |
+| --- | --- |
+| `main.py` | Original Colab export containing prompts, inline sensor data, example reports, and API calls |
+| `Prompt data/` | Nine demonstration videos |
+| `test_data/` | Ten test videos in the current release |
+| `Results.xlsx` | Existing experimental workbook |
+| `assets/figures/` | Architecture and input illustrations |
+| `docs/` | Method and release notes |
 
----
+**The current source is a research export, not a standalone Python application.** It contains Colab-specific syntax and requires preparation before execution. The [release notes](docs/RELEASE.md) explain the exact gaps; no end-to-end reproduction is claimed here.
 
-## 📁 Repo Structure
-├── main.py.py          # Main pipeline — video + audio + sensor processing through Gemini
-├── Prompt data/        # RDR prompt templates — all 4 phases with few-shot examples
-├── test_data/          # Semi-synthetic aerospace test cases
-└── Results.xlsx        # Evaluation results and analysis
+## Research scope
 
----
+AeroAssist is a proof of concept for human-reviewed analysis. It is not an operational diagnostic system or a basis for maintenance release, serviceability, or flight decisions. The study's semi-synthetic data and model-assisted evaluation limit the conclusions that can be drawn about real-world performance.
 
-## 📄 Citation
-S. Kalari, A. Panchumarthi, V. Ashok, R. Mukkamala.
-"AeroAssist: A Prompt-Driven Multimodal AI Framework for Aircraft Maintenance."
-IEEE Aerospace Conference, 2026.
+## Citation
+
+**AeroAssist: A Prompt-Driven Multimodal AI Framework for Aircraft Maintenance**  
+Sandeep Kalari, Abhinav Panchumarthi, Vikas Ashok, and Ravi Mukkamala. IEEE Aerospace Conference, 2026.
+
+Use [CITATION.bib](CITATION.bib). No blanket license for code or third-party media is declared by this documentation update.
